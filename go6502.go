@@ -1,8 +1,8 @@
-package cpu6502
+package go6502
 
 import (
-	"github.com/coopersimon/6502/flags"
-	"github.com/coopersimon/6502/utils"
+	"github.com/coopersimon/go6502/flags"
+	"github.com/coopersimon/go6502/utils"
 )
 
 // A cpu method that gets data and the address used (if one was used).
