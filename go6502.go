@@ -5,11 +5,8 @@ import (
 	"github.com/coopersimon/go6502/utils"
 )
 
-// A cpu method that gets data and the address used (if one was used).
-type addrModeReadFn = func(cpu *CPU) (uint8, uint16)
-
-// A cpu method that writes data back to the relevant location.
-type addrModeWriteFn = func(cpu *CPU, addr uint16) uint8
+// A cpu method that gets the address.
+type addrModeReadFn = func(cpu *CPU) uint16
 
 // MemoryBus
 type MemoryBus interface {
@@ -109,7 +106,7 @@ func (cpu *CPU) executeInstruction() {
 	case 0x15:
 		cpu.ora((*CPU).zeroPageX)
 	case 0x09:
-		cpu.ora((*CPU).immediate)
+		cpu.ora(nil)
 	case 0x19:
 		cpu.ora((*CPU).absoluteY)
 	case 0x0D:
@@ -126,7 +123,7 @@ func (cpu *CPU) executeInstruction() {
 	case 0x35:
 		cpu.and((*CPU).zeroPageX)
 	case 0x29:
-		cpu.and((*CPU).immediate)
+		cpu.and(nil)
 	case 0x39:
 		cpu.and((*CPU).absoluteY)
 	case 0x2D:
@@ -143,7 +140,7 @@ func (cpu *CPU) executeInstruction() {
 	case 0x55:
 		cpu.eor((*CPU).zeroPageX)
 	case 0x49:
-		cpu.eor((*CPU).immediate)
+		cpu.eor(nil)
 	case 0x59:
 		cpu.eor((*CPU).absoluteY)
 	case 0x4D:
@@ -160,13 +157,98 @@ func (cpu *CPU) executeInstruction() {
 	case 0x75:
 		cpu.adc((*CPU).zeroPageX)
 	case 0x69:
-		cpu.adc((*CPU).immediate)
+		cpu.adc(nil)
 	case 0x79:
 		cpu.adc((*CPU).absoluteY)
 	case 0x6D:
 		cpu.adc((*CPU).absolute)
 	case 0x7D:
 		cpu.adc((*CPU).absoluteX)
+
+	case 0x81:
+		cpu.sta((*CPU).indexedIndirect)
+	case 0x91:
+		cpu.sta((*CPU).indirectIndexed)
+	case 0x85:
+		cpu.sta((*CPU).zeroPage)
+	case 0x95:
+		cpu.sta((*CPU).zeroPageX)
+	case 0x99:
+		cpu.sta((*CPU).absoluteY)
+	case 0x8D:
+		cpu.sta((*CPU).absolute)
+	case 0x9D:
+		cpu.sta((*CPU).absoluteX)
+
+	case 0xA1:
+		cpu.lda((*CPU).indexedIndirect)
+	case 0xB1:
+		cpu.lda((*CPU).indirectIndexed)
+	case 0xA5:
+		cpu.lda((*CPU).zeroPage)
+	case 0xB5:
+		cpu.lda((*CPU).zeroPageX)
+	case 0xA9:
+		cpu.lda(nil)
+	case 0xB9:
+		cpu.lda((*CPU).absoluteY)
+	case 0xAD:
+		cpu.lda((*CPU).absolute)
+	case 0xBD:
+		cpu.lda((*CPU).absoluteX)
+
+	case 0xA0:
+		cpu.ldy(nil)
+	case 0xA4:
+		cpu.ldy((*CPU).zeroPage)
+	case 0xAC:
+		cpu.ldy((*CPU).absolute)
+	case 0xB4:
+		cpu.ldy((*CPU).zeroPageX)
+	case 0xBC:
+		cpu.ldy((*CPU).absoluteX)
+
+	case 0xA2:
+		cpu.ldx(nil)
+	case 0xA6:
+		cpu.ldx((*CPU).zeroPage)
+	case 0xAE:
+		cpu.ldx((*CPU).absolute)
+	case 0xB6:
+		cpu.ldx((*CPU).zeroPageY)
+	case 0xBE:
+		cpu.ldx((*CPU).absoluteY)
+
+	case 0xC0:
+		cpu.cmp(cpu.y, nil)
+	case 0xC4:
+		cpu.cmp(cpu.y, (*CPU).zeroPage)
+	case 0xCC:
+		cpu.cmp(cpu.y, (*CPU).absolute)
+
+	case 0xE0:
+		cpu.cmp(cpu.x, nil)
+	case 0xE4:
+		cpu.cmp(cpu.x, (*CPU).zeroPage)
+	case 0xEC:
+		cpu.cmp(cpu.x, (*CPU).absolute)
+
+	case 0xC1:
+		cpu.cmp(cpu.acc, (*CPU).indexedIndirect)
+	case 0xD1:
+		cpu.cmp(cpu.acc, (*CPU).indirectIndexed)
+	case 0xC5:
+		cpu.cmp(cpu.acc, (*CPU).zeroPage)
+	case 0xD5:
+		cpu.cmp(cpu.acc, (*CPU).zeroPageX)
+	case 0xC9:
+		cpu.cmp(cpu.acc, nil)
+	case 0xD9:
+		cpu.cmp(cpu.acc, (*CPU).absoluteY)
+	case 0xCD:
+		cpu.cmp(cpu.acc, (*CPU).absolute)
+	case 0xDD:
+		cpu.cmp(cpu.acc, (*CPU).absoluteX)
 
 	case 0xE1:
 		cpu.sbc((*CPU).indexedIndirect)
@@ -177,7 +259,7 @@ func (cpu *CPU) executeInstruction() {
 	case 0xF5:
 		cpu.sbc((*CPU).zeroPageX)
 	case 0xE9:
-		cpu.sbc((*CPU).immediate)
+		cpu.sbc(nil)
 	case 0xF9:
 		cpu.sbc((*CPU).absoluteY)
 	case 0xED:
@@ -260,98 +342,79 @@ func (cpu *CPU) stackPop() uint8 {
 
 /*** Addressing modes ***/
 
-// A
-func (cpu *CPU) accRead() (uint8, uint16) {
-	return cpu.acc, 0
-}
-
-// #vv
-func (cpu *CPU) immediate() (uint8, uint16) {
-	var data = cpu.fetch()
-	return data, 0
-}
-
 // $xx
-func (cpu *CPU) zeroPage() (uint8, uint16) {
+func (cpu *CPU) zeroPage() uint16 {
 	var addr = uint16(cpu.fetch())
-	var data = cpu.memRead(addr)
 
-	return data, addr
+	return addr
 }
 
 // $xx, X
-func (cpu *CPU) zeroPageX() (uint8, uint16) {
+func (cpu *CPU) zeroPageX() uint16 {
 	var addr = uint16(cpu.fetch() + cpu.x)
-	var data = cpu.memRead(addr)
 
-	return data, addr
+	return addr
 }
 
 // $xx, Y
-func (cpu *CPU) zeroPageY() (uint8, uint16) {
+func (cpu *CPU) zeroPageY() uint16 {
 	var addr = uint16(cpu.fetch() + cpu.y)
-	var data = cpu.memRead(addr)
 
-	return data, addr
+	return addr
 }
 
 // $xxxx
-func (cpu *CPU) absolute() (uint8, uint16) {
+func (cpu *CPU) absolute() uint16 {
 	var addrLo = cpu.fetch()
 	var addrHi = cpu.fetch()
 
 	var addr = utils.Make16(addrHi, addrLo)
-	var data = cpu.memRead(addr)
 
-	return data, addr
+	return addr
 }
 
 // $xxxx, X
-func (cpu *CPU) absoluteX() (uint8, uint16) {
+func (cpu *CPU) absoluteX() uint16 {
 	var addrLo = cpu.fetch()
 	var addrHi = cpu.fetch()
 
 	var addr = utils.Make16(addrHi, addrLo) + uint16(cpu.x)
-	var data = cpu.memRead(addr)
 
-	return data, addr
+	return addr
 }
 
 // $xxxx, Y
-func (cpu *CPU) absoluteY() (uint8, uint16) {
+func (cpu *CPU) absoluteY() uint16 {
 	var addrLo = cpu.fetch()
 	var addrHi = cpu.fetch()
 
 	var addr = utils.Make16(addrHi, addrLo) + uint16(cpu.y)
-	var data = cpu.memRead(addr)
 
-	return data, addr
+	return addr
 }
 
 // ($xx, X)
-func (cpu *CPU) indexedIndirect() (uint8, uint16) {
+func (cpu *CPU) indexedIndirect() uint16 {
 	var target = uint16(cpu.fetch() + cpu.x)
 
 	var addrLo = cpu.memRead(target)
 	var addrHi = cpu.memRead(target + 1)
 
 	var addr = utils.Make16(addrHi, addrLo)
-	var data = cpu.memRead(addr)
 
-	return data, addr
+	return addr
 }
 
 // ($xx), Y
-func (cpu *CPU) indirectIndexed() (uint8, uint16) {
+func (cpu *CPU) indirectIndexed() uint16 {
 	var target = uint16(cpu.fetch())
 
 	var addrLo = cpu.memRead(target)
 	var addrHi = cpu.memRead(target + 1)
 
 	var addr = utils.Make16(addrHi, addrLo) + uint16(cpu.y)
-	var data = cpu.memRead(addr)
 
-	return data, addr
+	return addr
 }
 
 // Addressing modes
@@ -360,8 +423,8 @@ func (cpu *CPU) indirectIndexed() (uint8, uint16) {
 
 /*** Arithmetic ***/
 
-func (cpu *CPU) adc(dataMode addrModeReadFn) {
-	data, _ := dataMode(cpu)
+func (cpu *CPU) adc(addrMode addrModeReadFn) {
+	data, _ := cpu.dataAddr(addrMode)
 
 	if cpu.pf.Test(flags.D) {
 		// Decimal
@@ -370,8 +433,8 @@ func (cpu *CPU) adc(dataMode addrModeReadFn) {
 	}
 }
 
-func (cpu *CPU) sbc(dataMode addrModeReadFn) {
-	data, _ := dataMode(cpu)
+func (cpu *CPU) sbc(addrMode addrModeReadFn) {
+	data, _ := cpu.dataAddr(addrMode)
 
 	if cpu.pf.Test(flags.D) {
 		// Decimal
@@ -380,30 +443,49 @@ func (cpu *CPU) sbc(dataMode addrModeReadFn) {
 	}
 }
 
+func (cpu *CPU) inc(addrMode addrModeReadFn) {
+	data, addr := cpu.dataAddr(addrMode)
+
+	cpu.memWrite(addr, data+1)
+}
+
+func (cpu *CPU) dec(addrMode addrModeReadFn) {
+	data, addr := cpu.dataAddr(addrMode)
+
+	cpu.memWrite(addr, data-1)
+}
+
+func (cpu *CPU) cmp(reg uint8, addrMode addrModeReadFn) {
+	data, _ := cpu.dataAddr(addrMode)
+
+	cpu.setNZ(reg - data)
+	cpu.pf.SetIf(flags.C, reg >= data)
+}
+
 /*** Bitwise ***/
 
-func (cpu *CPU) ora(dataMode addrModeReadFn) {
-	data, _ := dataMode(cpu)
+func (cpu *CPU) ora(addrMode addrModeReadFn) {
+	data, _ := cpu.dataAddr(addrMode)
 	cpu.acc |= data
 	cpu.setNZ(cpu.acc)
 }
 
-func (cpu *CPU) and(dataMode addrModeReadFn) {
-	data, _ := dataMode(cpu)
+func (cpu *CPU) and(addrMode addrModeReadFn) {
+	data, _ := cpu.dataAddr(addrMode)
 	cpu.acc &= data
 	cpu.setNZ(cpu.acc)
 }
 
-func (cpu *CPU) eor(dataMode addrModeReadFn) {
-	data, _ := dataMode(cpu)
+func (cpu *CPU) eor(addrMode addrModeReadFn) {
+	data, _ := cpu.dataAddr(addrMode)
 	cpu.acc ^= data
 	cpu.setNZ(cpu.acc)
 }
 
-func (cpu *CPU) asl(dataMode addrModeReadFn) {
+func (cpu *CPU) asl(addrMode addrModeReadFn) {
 	const highBit = 1 << 7
 
-	data, addr := dataMode(cpu)
+	data, addr := cpu.dataAddr(addrMode)
 
 	cpu.pf.SetIf(flags.C, (data&highBit) != 0)
 	cpu.setNZ(data)
@@ -411,10 +493,10 @@ func (cpu *CPU) asl(dataMode addrModeReadFn) {
 	cpu.memWrite(addr, data<<1)
 }
 
-func (cpu *CPU) lsr(dataMode addrModeReadFn) {
+func (cpu *CPU) lsr(addrMode addrModeReadFn) {
 	const lowBit = 1 << 0
 
-	data, addr := dataMode(cpu)
+	data, addr := cpu.dataAddr(addrMode)
 
 	cpu.pf.SetIf(flags.C, (data&lowBit) != 0)
 	cpu.setNZ(data)
@@ -422,10 +504,10 @@ func (cpu *CPU) lsr(dataMode addrModeReadFn) {
 	cpu.memWrite(addr, data>>1)
 }
 
-func (cpu *CPU) rol(dataMode addrModeReadFn) {
+func (cpu *CPU) rol(addrMode addrModeReadFn) {
 	const highBit = 1 << 7
 
-	data, addr := dataMode(cpu)
+	data, addr := cpu.dataAddr(addrMode)
 	var carry = uint8(cpu.pf & flags.C)
 	var result = (data << 1) | carry
 
@@ -435,10 +517,10 @@ func (cpu *CPU) rol(dataMode addrModeReadFn) {
 	cpu.memWrite(addr, result)
 }
 
-func (cpu *CPU) ror(dataMode addrModeReadFn) {
+func (cpu *CPU) ror(addrMode addrModeReadFn) {
 	const lowBit = 1 << 0
 
-	data, addr := dataMode(cpu)
+	data, addr := cpu.dataAddr(addrMode)
 	var carry = uint8(cpu.pf&flags.C) << 7
 	var result = (data >> 1) | carry
 
@@ -446,6 +528,38 @@ func (cpu *CPU) ror(dataMode addrModeReadFn) {
 	cpu.setNZ(data)
 
 	cpu.memWrite(addr, result)
+}
+
+/*** Data moving ***/
+
+func (cpu *CPU) sta(addrMode addrModeReadFn) {
+	addr := addrMode(cpu)
+	cpu.memWrite(addr, cpu.acc)
+}
+
+func (cpu *CPU) sty(addrMode addrModeReadFn) {
+	addr := addrMode(cpu)
+	cpu.memWrite(addr, cpu.y)
+}
+
+func (cpu *CPU) stx(addrMode addrModeReadFn) {
+	addr := addrMode(cpu)
+	cpu.memWrite(addr, cpu.x)
+}
+
+func (cpu *CPU) lda(addrMode addrModeReadFn) {
+	data, _ := cpu.dataAddr(addrMode)
+	cpu.acc = data
+}
+
+func (cpu *CPU) ldy(addrMode addrModeReadFn) {
+	data, _ := cpu.dataAddr(addrMode)
+	cpu.y = data
+}
+
+func (cpu *CPU) ldx(addrMode addrModeReadFn) {
+	data, _ := cpu.dataAddr(addrMode)
+	cpu.x = data
 }
 
 /*** MISC ***/
@@ -477,4 +591,17 @@ func (cpu *CPU) binaryArithmetic(data uint8) {
 	cpu.pf.SetIf(flags.C, (result&carryBit) != 0)
 
 	cpu.acc = finalResult
+}
+
+// Resolve an address and load the data.
+func (cpu *CPU) dataAddr(addrMode addrModeReadFn) (data uint8, addr uint16) {
+	if addrMode == nil {
+		addr = 0
+		data = cpu.fetch()
+	} else {
+		addr = addrMode(cpu)
+		data = cpu.memRead(addr)
+	}
+
+	return
 }
