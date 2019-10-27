@@ -112,9 +112,9 @@ func (cpu *CPU) executeInstruction() {
 		cpu.ora((*CPU).immediate)
 	case 0x19:
 		cpu.ora((*CPU).absoluteY)
-	case 0x0A:
+	case 0x0D:
 		cpu.ora((*CPU).absolute)
-	case 0x1A:
+	case 0x1D:
 		cpu.ora((*CPU).absoluteX)
 
 	case 0x21:
@@ -129,9 +129,9 @@ func (cpu *CPU) executeInstruction() {
 		cpu.and((*CPU).immediate)
 	case 0x39:
 		cpu.and((*CPU).absoluteY)
-	case 0x2A:
+	case 0x2D:
 		cpu.and((*CPU).absolute)
-	case 0x3A:
+	case 0x3D:
 		cpu.and((*CPU).absoluteX)
 
 	case 0x41:
@@ -146,9 +146,9 @@ func (cpu *CPU) executeInstruction() {
 		cpu.eor((*CPU).immediate)
 	case 0x59:
 		cpu.eor((*CPU).absoluteY)
-	case 0x4A:
+	case 0x4D:
 		cpu.eor((*CPU).absolute)
-	case 0x5A:
+	case 0x5D:
 		cpu.eor((*CPU).absoluteX)
 
 	case 0x61:
@@ -163,9 +163,9 @@ func (cpu *CPU) executeInstruction() {
 		cpu.adc((*CPU).immediate)
 	case 0x79:
 		cpu.adc((*CPU).absoluteY)
-	case 0x6A:
+	case 0x6D:
 		cpu.adc((*CPU).absolute)
-	case 0x7A:
+	case 0x7D:
 		cpu.adc((*CPU).absoluteX)
 
 	case 0xE1:
@@ -180,10 +180,47 @@ func (cpu *CPU) executeInstruction() {
 		cpu.sbc((*CPU).immediate)
 	case 0xF9:
 		cpu.sbc((*CPU).absoluteY)
-	case 0xEA:
+	case 0xED:
 		cpu.sbc((*CPU).absolute)
-	case 0xFA:
+	case 0xFD:
 		cpu.sbc((*CPU).absoluteX)
+
+	case 0x06:
+		cpu.asl((*CPU).zeroPage)
+	case 0x16:
+		cpu.asl((*CPU).zeroPageX)
+	case 0x0E:
+		cpu.asl((*CPU).absolute)
+	case 0x1E:
+		cpu.asl((*CPU).absoluteX)
+
+	case 0x26:
+		cpu.rol((*CPU).zeroPage)
+	case 0x36:
+		cpu.rol((*CPU).zeroPageX)
+	case 0x2E:
+		cpu.rol((*CPU).absolute)
+	case 0x3E:
+		cpu.rol((*CPU).absoluteX)
+
+	case 0x46:
+		cpu.lsr((*CPU).zeroPage)
+	case 0x56:
+		cpu.lsr((*CPU).zeroPageX)
+	case 0x4E:
+		cpu.lsr((*CPU).absolute)
+	case 0x5E:
+		cpu.lsr((*CPU).absoluteX)
+
+	case 0x66:
+		cpu.ror((*CPU).zeroPage)
+	case 0x76:
+		cpu.ror((*CPU).zeroPageX)
+	case 0x6E:
+		cpu.ror((*CPU).absolute)
+	case 0x7E:
+		cpu.ror((*CPU).absoluteX)
+
 	}
 
 }
@@ -343,6 +380,8 @@ func (cpu *CPU) sbc(dataMode addrModeReadFn) {
 	}
 }
 
+/*** Bitwise ***/
+
 func (cpu *CPU) ora(dataMode addrModeReadFn) {
 	data, _ := dataMode(cpu)
 	cpu.acc |= data
@@ -359,6 +398,54 @@ func (cpu *CPU) eor(dataMode addrModeReadFn) {
 	data, _ := dataMode(cpu)
 	cpu.acc ^= data
 	cpu.setNZ(cpu.acc)
+}
+
+func (cpu *CPU) asl(dataMode addrModeReadFn) {
+	const highBit = 1 << 7
+
+	data, addr := dataMode(cpu)
+
+	cpu.pf.SetIf(flags.C, (data&highBit) != 0)
+	cpu.setNZ(data)
+
+	cpu.memWrite(addr, data<<1)
+}
+
+func (cpu *CPU) lsr(dataMode addrModeReadFn) {
+	const lowBit = 1 << 0
+
+	data, addr := dataMode(cpu)
+
+	cpu.pf.SetIf(flags.C, (data&lowBit) != 0)
+	cpu.setNZ(data)
+
+	cpu.memWrite(addr, data>>1)
+}
+
+func (cpu *CPU) rol(dataMode addrModeReadFn) {
+	const highBit = 1 << 7
+
+	data, addr := dataMode(cpu)
+	var carry = uint8(cpu.pf & flags.C)
+	var result = (data << 1) | carry
+
+	cpu.pf.SetIf(flags.C, (data&highBit) != 0)
+	cpu.setNZ(data)
+
+	cpu.memWrite(addr, result)
+}
+
+func (cpu *CPU) ror(dataMode addrModeReadFn) {
+	const lowBit = 1 << 0
+
+	data, addr := dataMode(cpu)
+	var carry = uint8(cpu.pf&flags.C) << 7
+	var result = (data >> 1) | carry
+
+	cpu.pf.SetIf(flags.C, (data&lowBit) != 0)
+	cpu.setNZ(data)
+
+	cpu.memWrite(addr, result)
 }
 
 /*** MISC ***/
