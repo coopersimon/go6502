@@ -180,6 +180,20 @@ func (cpu *CPU) executeInstruction() {
 	case 0x9D:
 		cpu.sta((*CPU).absoluteX)
 
+	case 0x84:
+		cpu.sty((*CPU).zeroPage)
+	case 0x94:
+		cpu.sty((*CPU).zeroPageX)
+	case 0x8C:
+		cpu.sty((*CPU).absolute)
+
+	case 0x86:
+		cpu.stx((*CPU).zeroPage)
+	case 0x96:
+		cpu.stx((*CPU).zeroPageX)
+	case 0x8E:
+		cpu.stx((*CPU).absolute)
+
 	case 0xA1:
 		cpu.lda((*CPU).indexedIndirect)
 	case 0xB1:
@@ -267,6 +281,8 @@ func (cpu *CPU) executeInstruction() {
 	case 0xFD:
 		cpu.sbc((*CPU).absoluteX)
 
+	case 0x0A:
+		cpu.asl(nil)
 	case 0x06:
 		cpu.asl((*CPU).zeroPage)
 	case 0x16:
@@ -276,6 +292,8 @@ func (cpu *CPU) executeInstruction() {
 	case 0x1E:
 		cpu.asl((*CPU).absoluteX)
 
+	case 0x2A:
+		cpu.rol(nil)
 	case 0x26:
 		cpu.rol((*CPU).zeroPage)
 	case 0x36:
@@ -285,6 +303,8 @@ func (cpu *CPU) executeInstruction() {
 	case 0x3E:
 		cpu.rol((*CPU).absoluteX)
 
+	case 0x4A:
+		cpu.lsr(nil)
 	case 0x46:
 		cpu.lsr((*CPU).zeroPage)
 	case 0x56:
@@ -294,6 +314,8 @@ func (cpu *CPU) executeInstruction() {
 	case 0x5E:
 		cpu.lsr((*CPU).absoluteX)
 
+	case 0x6A:
+		cpu.ror(nil)
 	case 0x66:
 		cpu.ror((*CPU).zeroPage)
 	case 0x76:
@@ -303,6 +325,93 @@ func (cpu *CPU) executeInstruction() {
 	case 0x7E:
 		cpu.ror((*CPU).absoluteX)
 
+	case 0xC6:
+		cpu.dec((*CPU).zeroPage)
+	case 0xD6:
+		cpu.dec((*CPU).zeroPageX)
+	case 0xCE:
+		cpu.dec((*CPU).absolute)
+	case 0xDE:
+		cpu.dec((*CPU).absoluteX)
+
+	case 0xE6:
+		cpu.inc((*CPU).zeroPage)
+	case 0xF6:
+		cpu.inc((*CPU).zeroPageX)
+	case 0xEE:
+		cpu.inc((*CPU).absolute)
+	case 0xFE:
+		cpu.inc((*CPU).absoluteX)
+
+	case 0xE8:
+		cpu.inx()
+	case 0xC8:
+		cpu.iny()
+
+	case 0x98:
+		cpu.setNZ(cpu.y)
+		cpu.acc = cpu.y
+	case 0xA8:
+		cpu.setNZ(cpu.acc)
+		cpu.y = cpu.acc
+	case 0x8A:
+		cpu.setNZ(cpu.x)
+		cpu.acc = cpu.x
+	case 0x9A:
+		cpu.setNZ(cpu.x)
+		cpu.sp = cpu.x
+	case 0xAA:
+		cpu.setNZ(cpu.acc)
+		cpu.x = cpu.acc
+	case 0xBA:
+		cpu.setNZ(cpu.sp)
+		cpu.x = cpu.sp
+
+	case 0x18:
+		cpu.pf.Clear(flags.C)
+	case 0x38:
+		cpu.pf.Set(flags.C)
+	case 0x58:
+		cpu.pf.Clear(flags.I)
+	case 0x78:
+		cpu.pf.Set(flags.I)
+	case 0xB8:
+		cpu.pf.Clear(flags.V)
+	case 0xD8:
+		cpu.pf.Clear(flags.D)
+	case 0xF8:
+		cpu.pf.Set(flags.D)
+
+	case 0x24:
+		cpu.bit((*CPU).zeroPage)
+	case 0x2C:
+		cpu.bit((*CPU).absolute)
+
+	case 0x08:
+		cpu.stackPush(uint8(cpu.pf))
+	case 0x28:
+		cpu.pf = flags.ProgramFlags(cpu.stackPop())
+	case 0x48:
+		cpu.stackPush(cpu.acc)
+	case 0x68:
+		cpu.acc = cpu.stackPop()
+
+	case 0x10:
+		cpu.branch(!cpu.pf.Test(flags.N))
+	case 0x30:
+		cpu.branch(cpu.pf.Test(flags.N))
+	case 0x50:
+		cpu.branch(!cpu.pf.Test(flags.V))
+	case 0x70:
+		cpu.branch(cpu.pf.Test(flags.V))
+	case 0x90:
+		cpu.branch(!cpu.pf.Test(flags.C))
+	case 0xB0:
+		cpu.branch(cpu.pf.Test(flags.C))
+	case 0xD0:
+		cpu.branch(!cpu.pf.Test(flags.Z))
+	case 0xF0:
+		cpu.branch(cpu.pf.Test(flags.Z))
 	}
 
 }
@@ -455,11 +564,20 @@ func (cpu *CPU) dec(addrMode addrModeReadFn) {
 	cpu.memWrite(addr, data-1)
 }
 
-func (cpu *CPU) cmp(reg uint8, addrMode addrModeReadFn) {
-	data, _ := cpu.dataAddr(addrMode)
+func (cpu *CPU) inx() {
+	cpu.x++
+}
 
-	cpu.setNZ(reg - data)
-	cpu.pf.SetIf(flags.C, reg >= data)
+func (cpu *CPU) dex() {
+	cpu.x--
+}
+
+func (cpu *CPU) iny() {
+	cpu.y++
+}
+
+func (cpu *CPU) dey() {
+	cpu.y--
 }
 
 /*** Bitwise ***/
@@ -485,49 +603,91 @@ func (cpu *CPU) eor(addrMode addrModeReadFn) {
 func (cpu *CPU) asl(addrMode addrModeReadFn) {
 	const highBit = 1 << 7
 
-	data, addr := cpu.dataAddr(addrMode)
+	var data uint8
+	var addr uint16
+	if addrMode == nil {
+		data, addr = cpu.dataAddr(addrMode)
+	} else {
+		data = cpu.acc
+	}
 
 	cpu.pf.SetIf(flags.C, (data&highBit) != 0)
 	cpu.setNZ(data)
 
-	cpu.memWrite(addr, data<<1)
+	if addrMode == nil {
+		cpu.memWrite(addr, data<<1)
+	} else {
+		cpu.acc = data << 1
+	}
 }
 
 func (cpu *CPU) lsr(addrMode addrModeReadFn) {
 	const lowBit = 1 << 0
 
-	data, addr := cpu.dataAddr(addrMode)
+	var data uint8
+	var addr uint16
+	if addrMode == nil {
+		data, addr = cpu.dataAddr(addrMode)
+	} else {
+		data = cpu.acc
+	}
 
 	cpu.pf.SetIf(flags.C, (data&lowBit) != 0)
 	cpu.setNZ(data)
 
-	cpu.memWrite(addr, data>>1)
+	if addrMode == nil {
+		cpu.memWrite(addr, data>>1)
+	} else {
+		cpu.acc = data >> 1
+	}
 }
 
 func (cpu *CPU) rol(addrMode addrModeReadFn) {
 	const highBit = 1 << 7
 
-	data, addr := cpu.dataAddr(addrMode)
+	var data uint8
+	var addr uint16
+	if addrMode == nil {
+		data, addr = cpu.dataAddr(addrMode)
+	} else {
+		data = cpu.acc
+	}
+
 	var carry = uint8(cpu.pf & flags.C)
 	var result = (data << 1) | carry
 
 	cpu.pf.SetIf(flags.C, (data&highBit) != 0)
 	cpu.setNZ(data)
 
-	cpu.memWrite(addr, result)
+	if addrMode == nil {
+		cpu.memWrite(addr, result)
+	} else {
+		cpu.acc = result
+	}
 }
 
 func (cpu *CPU) ror(addrMode addrModeReadFn) {
 	const lowBit = 1 << 0
 
-	data, addr := cpu.dataAddr(addrMode)
+	var data uint8
+	var addr uint16
+	if addrMode == nil {
+		data, addr = cpu.dataAddr(addrMode)
+	} else {
+		data = cpu.acc
+	}
+
 	var carry = uint8(cpu.pf&flags.C) << 7
 	var result = (data >> 1) | carry
 
 	cpu.pf.SetIf(flags.C, (data&lowBit) != 0)
 	cpu.setNZ(data)
 
-	cpu.memWrite(addr, result)
+	if addrMode == nil {
+		cpu.memWrite(addr, result)
+	} else {
+		cpu.acc = result
+	}
 }
 
 /*** Data moving ***/
@@ -549,17 +709,50 @@ func (cpu *CPU) stx(addrMode addrModeReadFn) {
 
 func (cpu *CPU) lda(addrMode addrModeReadFn) {
 	data, _ := cpu.dataAddr(addrMode)
+	cpu.setNZ(data)
 	cpu.acc = data
 }
 
 func (cpu *CPU) ldy(addrMode addrModeReadFn) {
 	data, _ := cpu.dataAddr(addrMode)
+	cpu.setNZ(data)
 	cpu.y = data
 }
 
 func (cpu *CPU) ldx(addrMode addrModeReadFn) {
 	data, _ := cpu.dataAddr(addrMode)
+	cpu.setNZ(data)
 	cpu.x = data
+}
+
+/*** Flags ***/
+
+func (cpu *CPU) cmp(reg uint8, addrMode addrModeReadFn) {
+	data, _ := cpu.dataAddr(addrMode)
+
+	cpu.setNZ(reg - data)
+	cpu.pf.SetIf(flags.C, reg >= data)
+}
+
+func (cpu *CPU) bit(addrMode addrModeReadFn) {
+	const signBit = 1 << 7
+	const overflowBit = 1 << 6
+
+	data, _ := cpu.dataAddr(addrMode)
+
+	cpu.pf.SetIf(flags.N, (data&signBit) != 0)
+	cpu.pf.SetIf(flags.V, (data&overflowBit) != 0)
+	cpu.pf.SetIf(flags.Z, (cpu.acc&data) == 0)
+}
+
+/*** Branches ***/
+
+func (cpu *CPU) branch(cond bool) {
+	data := int16(int8(cpu.fetch()))
+
+	if cond {
+		cpu.pc += uint16(data)
+	}
 }
 
 /*** MISC ***/
