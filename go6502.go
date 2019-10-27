@@ -412,6 +412,17 @@ func (cpu *CPU) executeInstruction() {
 		cpu.branch(!cpu.pf.Test(flags.Z))
 	case 0xF0:
 		cpu.branch(cpu.pf.Test(flags.Z))
+
+	case 0x20:
+		cpu.jsr()
+	case 0x4C:
+		cpu.jmpAbsolute()
+	case 0x6C:
+		cpu.jmpIndirect()
+	case 0x40:
+		cpu.rti()
+	case 0x60:
+		cpu.rts()
 	}
 
 }
@@ -453,23 +464,17 @@ func (cpu *CPU) stackPop() uint8 {
 
 // $xx
 func (cpu *CPU) zeroPage() uint16 {
-	var addr = uint16(cpu.fetch())
-
-	return addr
+	return uint16(cpu.fetch())
 }
 
 // $xx, X
 func (cpu *CPU) zeroPageX() uint16 {
-	var addr = uint16(cpu.fetch() + cpu.x)
-
-	return addr
+	return uint16(cpu.fetch() + cpu.x)
 }
 
 // $xx, Y
 func (cpu *CPU) zeroPageY() uint16 {
-	var addr = uint16(cpu.fetch() + cpu.y)
-
-	return addr
+	return uint16(cpu.fetch() + cpu.y)
 }
 
 // $xxxx
@@ -477,9 +482,7 @@ func (cpu *CPU) absolute() uint16 {
 	var addrLo = cpu.fetch()
 	var addrHi = cpu.fetch()
 
-	var addr = utils.Make16(addrHi, addrLo)
-
-	return addr
+	return utils.Make16(addrHi, addrLo)
 }
 
 // $xxxx, X
@@ -487,9 +490,7 @@ func (cpu *CPU) absoluteX() uint16 {
 	var addrLo = cpu.fetch()
 	var addrHi = cpu.fetch()
 
-	var addr = utils.Make16(addrHi, addrLo) + uint16(cpu.x)
-
-	return addr
+	return utils.Make16(addrHi, addrLo) + uint16(cpu.x)
 }
 
 // $xxxx, Y
@@ -497,9 +498,7 @@ func (cpu *CPU) absoluteY() uint16 {
 	var addrLo = cpu.fetch()
 	var addrHi = cpu.fetch()
 
-	var addr = utils.Make16(addrHi, addrLo) + uint16(cpu.y)
-
-	return addr
+	return utils.Make16(addrHi, addrLo) + uint16(cpu.y)
 }
 
 // ($xx, X)
@@ -509,9 +508,7 @@ func (cpu *CPU) indexedIndirect() uint16 {
 	var addrLo = cpu.memRead(target)
 	var addrHi = cpu.memRead(target + 1)
 
-	var addr = utils.Make16(addrHi, addrLo)
-
-	return addr
+	return utils.Make16(addrHi, addrLo)
 }
 
 // ($xx), Y
@@ -521,9 +518,7 @@ func (cpu *CPU) indirectIndexed() uint16 {
 	var addrLo = cpu.memRead(target)
 	var addrHi = cpu.memRead(target + 1)
 
-	var addr = utils.Make16(addrHi, addrLo) + uint16(cpu.y)
-
-	return addr
+	return utils.Make16(addrHi, addrLo) + uint16(cpu.y)
 }
 
 // Addressing modes
@@ -753,6 +748,45 @@ func (cpu *CPU) branch(cond bool) {
 	if cond {
 		cpu.pc += uint16(data)
 	}
+}
+
+func (cpu *CPU) jmpAbsolute() {
+	cpu.pc = cpu.absolute()
+}
+
+func (cpu *CPU) jmpIndirect() {
+	var addr = cpu.absolute()
+
+	var pcLo = cpu.memRead(addr)
+	var pcHi = cpu.memRead(utils.Make16(utils.Hi(addr), utils.Lo(addr)+1))
+
+	cpu.pc = utils.Make16(pcHi, pcLo)
+}
+
+func (cpu *CPU) jsr() {
+	var addr = cpu.absolute()
+
+	var storePC = cpu.pc - 1
+	cpu.stackPush(utils.Hi(storePC))
+	cpu.stackPush(utils.Lo(storePC))
+
+	cpu.pc = addr
+}
+
+func (cpu *CPU) rts() {
+	var cpuLo = cpu.stackPop()
+	var cpuHi = cpu.stackPop()
+
+	cpu.pc = utils.Make16(cpuHi, cpuLo) + 1
+}
+
+func (cpu *CPU) rti() {
+	cpu.pf = flags.ProgramFlags(cpu.stackPop())
+
+	var cpuLo = cpu.stackPop()
+	var cpuHi = cpu.stackPop()
+
+	cpu.pc = utils.Make16(cpuHi, cpuLo)
 }
 
 /*** MISC ***/
