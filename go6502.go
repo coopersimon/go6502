@@ -82,7 +82,6 @@ func (cpu *CPU) interruptRoutine(intFlag flags.Interrupt, vector uint16) {
 	cpu.stackPush(uint8(cpu.pf))
 
 	cpu.pf.Set(flags.I)
-	cpu.pf.Clear(flags.B)
 
 	var pcLo = cpu.memRead(vector)
 	var pcHi = cpu.memRead(vector + 1)
@@ -190,7 +189,7 @@ func (cpu *CPU) executeInstruction() {
 	case 0x86:
 		cpu.stx((*CPU).zeroPage)
 	case 0x96:
-		cpu.stx((*CPU).zeroPageX)
+		cpu.stx((*CPU).zeroPageY)
 	case 0x8E:
 		cpu.stx((*CPU).absolute)
 
@@ -343,44 +342,49 @@ func (cpu *CPU) executeInstruction() {
 	case 0xFE:
 		cpu.inc((*CPU).absoluteX)
 
+	case 0xCA:
+		cpu.dex()
+	case 0x88:
+		cpu.dey()
+
 	case 0xE8:
 		cpu.inx()
 	case 0xC8:
 		cpu.iny()
 
-	case 0x98:
+	case 0x98: // TYA
 		cpu.setNZ(cpu.y)
 		cpu.acc = cpu.y
-	case 0xA8:
+	case 0xA8: // TAY
 		cpu.setNZ(cpu.acc)
 		cpu.y = cpu.acc
-	case 0x8A:
+	case 0x8A: // TXA
 		cpu.setNZ(cpu.x)
 		cpu.acc = cpu.x
-	case 0x9A:
+	case 0x9A: // TXS
 		cpu.setNZ(cpu.x)
 		cpu.sp = cpu.x
-	case 0xAA:
+	case 0xAA: // TAX
 		cpu.setNZ(cpu.acc)
 		cpu.x = cpu.acc
-	case 0xBA:
+	case 0xBA: // TSX
 		cpu.setNZ(cpu.sp)
 		cpu.x = cpu.sp
 
 	case 0x18:
-		cpu.pf.Clear(flags.C)
+		cpu.pf.Clear(flags.C) // CLC
 	case 0x38:
-		cpu.pf.Set(flags.C)
+		cpu.pf.Set(flags.C) // SEC
 	case 0x58:
-		cpu.pf.Clear(flags.I)
+		cpu.pf.Clear(flags.I) // CLI
 	case 0x78:
-		cpu.pf.Set(flags.I)
+		cpu.pf.Set(flags.I) // SEI
 	case 0xB8:
-		cpu.pf.Clear(flags.V)
+		cpu.pf.Clear(flags.V) // CLV
 	case 0xD8:
-		cpu.pf.Clear(flags.D)
+		cpu.pf.Clear(flags.D) // CLD
 	case 0xF8:
-		cpu.pf.Set(flags.D)
+		cpu.pf.Set(flags.D) //SED
 
 	case 0x24:
 		cpu.bit((*CPU).zeroPage)
@@ -388,30 +392,30 @@ func (cpu *CPU) executeInstruction() {
 		cpu.bit((*CPU).absolute)
 
 	case 0x08:
-		cpu.stackPush(uint8(cpu.pf))
+		cpu.stackPush(uint8(cpu.pf)) // PHP
 	case 0x28:
-		cpu.pf = flags.ProgramFlags(cpu.stackPop())
+		cpu.pf = flags.ProgramFlags(cpu.stackPop()) // PLP
 	case 0x48:
-		cpu.stackPush(cpu.acc)
+		cpu.stackPush(cpu.acc) // PHA
 	case 0x68:
-		cpu.acc = cpu.stackPop()
+		cpu.acc = cpu.stackPop() // PLA
 
 	case 0x10:
-		cpu.branch(!cpu.pf.Test(flags.N))
+		cpu.branch(!cpu.pf.Test(flags.N)) // BPL
 	case 0x30:
-		cpu.branch(cpu.pf.Test(flags.N))
+		cpu.branch(cpu.pf.Test(flags.N)) // BMI
 	case 0x50:
-		cpu.branch(!cpu.pf.Test(flags.V))
+		cpu.branch(!cpu.pf.Test(flags.V)) // BVC
 	case 0x70:
-		cpu.branch(cpu.pf.Test(flags.V))
+		cpu.branch(cpu.pf.Test(flags.V)) // BVS
 	case 0x90:
-		cpu.branch(!cpu.pf.Test(flags.C))
+		cpu.branch(!cpu.pf.Test(flags.C)) // BCC
 	case 0xB0:
-		cpu.branch(cpu.pf.Test(flags.C))
+		cpu.branch(cpu.pf.Test(flags.C)) // BCS
 	case 0xD0:
-		cpu.branch(!cpu.pf.Test(flags.Z))
+		cpu.branch(!cpu.pf.Test(flags.Z)) // BNE
 	case 0xF0:
-		cpu.branch(cpu.pf.Test(flags.Z))
+		cpu.branch(cpu.pf.Test(flags.Z)) // BEQ
 
 	case 0x20:
 		cpu.jsr()
@@ -424,7 +428,6 @@ func (cpu *CPU) executeInstruction() {
 	case 0x60:
 		cpu.rts()
 	}
-
 }
 
 /*** Basic Memory ***/
@@ -794,6 +797,7 @@ func (cpu *CPU) rti() {
 func (cpu *CPU) brk() {
 	cpu.pf.Set(flags.B)
 	cpu.interruptRoutine(flags.IRQ, 0xFFFE)
+	cpu.pf.Clear(flags.B)
 }
 
 /*** Instruction Helpers ***/
