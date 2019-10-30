@@ -1,4 +1,4 @@
-package utils
+package go6502
 
 // Make a 16-bit int from two 8 bit ints.
 func Make16(hi, lo uint8) uint16 {

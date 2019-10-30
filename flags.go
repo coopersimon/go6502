@@ -1,4 +1,4 @@
-package flags
+package go6502
 
 // Interrupt values.
 type Interrupt uint8

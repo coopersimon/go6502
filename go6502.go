@@ -1,10 +1,5 @@
 package go6502
 
-import (
-	"github.com/coopersimon/go6502/flags"
-	"github.com/coopersimon/go6502/utils"
-)
-
 // A cpu method that gets the address.
 type addrModeReadFn = func(cpu *CPU) uint16
 
@@ -12,25 +7,25 @@ type addrModeReadFn = func(cpu *CPU) uint16
 type MemoryBus interface {
 	Read(addr uint16) uint8
 	Write(addr uint16, data uint8)
-	Clock(cycles uint32) flags.Interrupt
+	Clock(cycles uint32) Interrupt
 }
 
 // CPU: 6502 CPU
 type CPU struct {
 	// Registers
-	acc uint8              // Accumulator
-	x   uint8              // X Register
-	y   uint8              // Y Register
-	sp  uint8              // Stack Pointer
-	pc  uint16             // Program Counter
-	pf  flags.ProgramFlags // Program Flags
+	acc uint8        // Accumulator
+	x   uint8        // X Register
+	y   uint8        // Y Register
+	sp  uint8        // Stack Pointer
+	pc  uint16       // Program Counter
+	pf  ProgramFlags // Program Flags
 
 	// Memory
 	memBus MemoryBus // 16-bit bus
 
 	// Interrupts
 	halt    bool
-	intMask flags.Interrupt
+	intMask Interrupt
 	cycles  uint32
 }
 
@@ -68,25 +63,25 @@ func (cpu *CPU) Step() uint32 {
 /*** INTERNAL ***/
 
 func (cpu *CPU) handleInterrupt() {
-	if cpu.intMask.Test(flags.NMI) {
-		cpu.interruptRoutine(flags.NMI, 0xFFFA)
-	} else if cpu.intMask.Test(flags.IRQ) && !cpu.pf.Test(flags.I) {
-		cpu.interruptRoutine(flags.IRQ, 0xFFFE)
+	if cpu.intMask.Test(NMI) {
+		cpu.interruptRoutine(NMI, 0xFFFA)
+	} else if cpu.intMask.Test(IRQ) && !cpu.pf.Test(I) {
+		cpu.interruptRoutine(IRQ, 0xFFFE)
 	}
 }
 
-func (cpu *CPU) interruptRoutine(intFlag flags.Interrupt, vector uint16) {
+func (cpu *CPU) interruptRoutine(intFlag Interrupt, vector uint16) {
 	cpu.intMask.Clear(intFlag)
-	cpu.stackPush(utils.Hi(cpu.pc))
-	cpu.stackPush(utils.Lo(cpu.pc))
+	cpu.stackPush(Hi(cpu.pc))
+	cpu.stackPush(Lo(cpu.pc))
 	cpu.stackPush(uint8(cpu.pf))
 
-	cpu.pf.Set(flags.I)
+	cpu.pf.Set(I)
 
 	var pcLo = cpu.memRead(vector)
 	var pcHi = cpu.memRead(vector + 1)
 
-	cpu.pc = utils.Make16(pcHi, pcLo)
+	cpu.pc = Make16(pcHi, pcLo)
 }
 
 func (cpu *CPU) executeInstruction() {
@@ -372,19 +367,19 @@ func (cpu *CPU) executeInstruction() {
 		cpu.x = cpu.sp
 
 	case 0x18:
-		cpu.pf.Clear(flags.C) // CLC
+		cpu.pf.Clear(C) // CLC
 	case 0x38:
-		cpu.pf.Set(flags.C) // SEC
+		cpu.pf.Set(C) // SEC
 	case 0x58:
-		cpu.pf.Clear(flags.I) // CLI
+		cpu.pf.Clear(I) // CLI
 	case 0x78:
-		cpu.pf.Set(flags.I) // SEI
+		cpu.pf.Set(I) // SEI
 	case 0xB8:
-		cpu.pf.Clear(flags.V) // CLV
+		cpu.pf.Clear(V) // CLV
 	case 0xD8:
-		cpu.pf.Clear(flags.D) // CLD
+		cpu.pf.Clear(D) // CLD
 	case 0xF8:
-		cpu.pf.Set(flags.D) //SED
+		cpu.pf.Set(D) //SED
 
 	case 0x24:
 		cpu.bit((*CPU).zeroPage)
@@ -394,28 +389,28 @@ func (cpu *CPU) executeInstruction() {
 	case 0x08:
 		cpu.stackPush(uint8(cpu.pf)) // PHP
 	case 0x28:
-		cpu.pf = flags.ProgramFlags(cpu.stackPop()) // PLP
+		cpu.pf = ProgramFlags(cpu.stackPop()) // PLP
 	case 0x48:
 		cpu.stackPush(cpu.acc) // PHA
 	case 0x68:
 		cpu.acc = cpu.stackPop() // PLA
 
 	case 0x10:
-		cpu.branch(!cpu.pf.Test(flags.N)) // BPL
+		cpu.branch(!cpu.pf.Test(N)) // BPL
 	case 0x30:
-		cpu.branch(cpu.pf.Test(flags.N)) // BMI
+		cpu.branch(cpu.pf.Test(N)) // BMI
 	case 0x50:
-		cpu.branch(!cpu.pf.Test(flags.V)) // BVC
+		cpu.branch(!cpu.pf.Test(V)) // BVC
 	case 0x70:
-		cpu.branch(cpu.pf.Test(flags.V)) // BVS
+		cpu.branch(cpu.pf.Test(V)) // BVS
 	case 0x90:
-		cpu.branch(!cpu.pf.Test(flags.C)) // BCC
+		cpu.branch(!cpu.pf.Test(C)) // BCC
 	case 0xB0:
-		cpu.branch(cpu.pf.Test(flags.C)) // BCS
+		cpu.branch(cpu.pf.Test(C)) // BCS
 	case 0xD0:
-		cpu.branch(!cpu.pf.Test(flags.Z)) // BNE
+		cpu.branch(!cpu.pf.Test(Z)) // BNE
 	case 0xF0:
-		cpu.branch(cpu.pf.Test(flags.Z)) // BEQ
+		cpu.branch(cpu.pf.Test(Z)) // BEQ
 
 	case 0x20:
 		cpu.jsr()
@@ -453,14 +448,14 @@ func (cpu *CPU) fetch() uint8 {
 
 // Push a byte onto the stack.
 func (cpu *CPU) stackPush(data uint8) {
-	cpu.memWrite(utils.Make16(1, cpu.sp), data)
+	cpu.memWrite(Make16(1, cpu.sp), data)
 	cpu.sp--
 }
 
 // Pop a byte off from the stack.
 func (cpu *CPU) stackPop() uint8 {
 	cpu.sp++
-	return cpu.memRead(utils.Make16(1, cpu.sp))
+	return cpu.memRead(Make16(1, cpu.sp))
 }
 
 /*** Addressing modes ***/
@@ -485,7 +480,7 @@ func (cpu *CPU) absolute() uint16 {
 	var addrLo = cpu.fetch()
 	var addrHi = cpu.fetch()
 
-	return utils.Make16(addrHi, addrLo)
+	return Make16(addrHi, addrLo)
 }
 
 // $xxxx, X
@@ -493,7 +488,7 @@ func (cpu *CPU) absoluteX() uint16 {
 	var addrLo = cpu.fetch()
 	var addrHi = cpu.fetch()
 
-	return utils.Make16(addrHi, addrLo) + uint16(cpu.x)
+	return Make16(addrHi, addrLo) + uint16(cpu.x)
 }
 
 // $xxxx, Y
@@ -501,7 +496,7 @@ func (cpu *CPU) absoluteY() uint16 {
 	var addrLo = cpu.fetch()
 	var addrHi = cpu.fetch()
 
-	return utils.Make16(addrHi, addrLo) + uint16(cpu.y)
+	return Make16(addrHi, addrLo) + uint16(cpu.y)
 }
 
 // ($xx, X)
@@ -511,7 +506,7 @@ func (cpu *CPU) indexedIndirect() uint16 {
 	var addrLo = cpu.memRead(target)
 	var addrHi = cpu.memRead(target + 1)
 
-	return utils.Make16(addrHi, addrLo)
+	return Make16(addrHi, addrLo)
 }
 
 // ($xx), Y
@@ -521,7 +516,7 @@ func (cpu *CPU) indirectIndexed() uint16 {
 	var addrLo = cpu.memRead(target)
 	var addrHi = cpu.memRead(target + 1)
 
-	return utils.Make16(addrHi, addrLo) + uint16(cpu.y)
+	return Make16(addrHi, addrLo) + uint16(cpu.y)
 }
 
 // Addressing modes
@@ -533,7 +528,7 @@ func (cpu *CPU) indirectIndexed() uint16 {
 func (cpu *CPU) adc(addrMode addrModeReadFn) {
 	data, _ := cpu.dataAddr(addrMode)
 
-	if cpu.pf.Test(flags.D) {
+	if cpu.pf.Test(D) {
 		// Decimal
 	} else {
 		cpu.binaryArithmetic(data)
@@ -543,7 +538,7 @@ func (cpu *CPU) adc(addrMode addrModeReadFn) {
 func (cpu *CPU) sbc(addrMode addrModeReadFn) {
 	data, _ := cpu.dataAddr(addrMode)
 
-	if cpu.pf.Test(flags.D) {
+	if cpu.pf.Test(D) {
 		// Decimal
 	} else {
 		cpu.binaryArithmetic(^data)
@@ -609,7 +604,7 @@ func (cpu *CPU) asl(addrMode addrModeReadFn) {
 		data = cpu.acc
 	}
 
-	cpu.pf.SetIf(flags.C, (data&highBit) != 0)
+	cpu.pf.SetIf(C, (data&highBit) != 0)
 	cpu.setNZ(data)
 
 	if addrMode == nil {
@@ -630,7 +625,7 @@ func (cpu *CPU) lsr(addrMode addrModeReadFn) {
 		data = cpu.acc
 	}
 
-	cpu.pf.SetIf(flags.C, (data&lowBit) != 0)
+	cpu.pf.SetIf(C, (data&lowBit) != 0)
 	cpu.setNZ(data)
 
 	if addrMode == nil {
@@ -651,10 +646,10 @@ func (cpu *CPU) rol(addrMode addrModeReadFn) {
 		data = cpu.acc
 	}
 
-	var carry = uint8(cpu.pf & flags.C)
+	var carry = uint8(cpu.pf & C)
 	var result = (data << 1) | carry
 
-	cpu.pf.SetIf(flags.C, (data&highBit) != 0)
+	cpu.pf.SetIf(C, (data&highBit) != 0)
 	cpu.setNZ(data)
 
 	if addrMode == nil {
@@ -675,10 +670,10 @@ func (cpu *CPU) ror(addrMode addrModeReadFn) {
 		data = cpu.acc
 	}
 
-	var carry = uint8(cpu.pf&flags.C) << 7
+	var carry = uint8(cpu.pf&C) << 7
 	var result = (data >> 1) | carry
 
-	cpu.pf.SetIf(flags.C, (data&lowBit) != 0)
+	cpu.pf.SetIf(C, (data&lowBit) != 0)
 	cpu.setNZ(data)
 
 	if addrMode == nil {
@@ -729,7 +724,7 @@ func (cpu *CPU) cmp(reg uint8, addrMode addrModeReadFn) {
 	data, _ := cpu.dataAddr(addrMode)
 
 	cpu.setNZ(reg - data)
-	cpu.pf.SetIf(flags.C, reg >= data)
+	cpu.pf.SetIf(C, reg >= data)
 }
 
 func (cpu *CPU) bit(addrMode addrModeReadFn) {
@@ -738,9 +733,9 @@ func (cpu *CPU) bit(addrMode addrModeReadFn) {
 
 	data, _ := cpu.dataAddr(addrMode)
 
-	cpu.pf.SetIf(flags.N, (data&signBit) != 0)
-	cpu.pf.SetIf(flags.V, (data&overflowBit) != 0)
-	cpu.pf.SetIf(flags.Z, (cpu.acc&data) == 0)
+	cpu.pf.SetIf(N, (data&signBit) != 0)
+	cpu.pf.SetIf(V, (data&overflowBit) != 0)
+	cpu.pf.SetIf(Z, (cpu.acc&data) == 0)
 }
 
 /*** Branches ***/
@@ -761,17 +756,17 @@ func (cpu *CPU) jmpIndirect() {
 	var addr = cpu.absolute()
 
 	var pcLo = cpu.memRead(addr)
-	var pcHi = cpu.memRead(utils.Make16(utils.Hi(addr), utils.Lo(addr)+1))
+	var pcHi = cpu.memRead(Make16(Hi(addr), Lo(addr)+1))
 
-	cpu.pc = utils.Make16(pcHi, pcLo)
+	cpu.pc = Make16(pcHi, pcLo)
 }
 
 func (cpu *CPU) jsr() {
 	var addr = cpu.absolute()
 
 	var storePC = cpu.pc - 1
-	cpu.stackPush(utils.Hi(storePC))
-	cpu.stackPush(utils.Lo(storePC))
+	cpu.stackPush(Hi(storePC))
+	cpu.stackPush(Lo(storePC))
 
 	cpu.pc = addr
 }
@@ -780,46 +775,46 @@ func (cpu *CPU) rts() {
 	var cpuLo = cpu.stackPop()
 	var cpuHi = cpu.stackPop()
 
-	cpu.pc = utils.Make16(cpuHi, cpuLo) + 1
+	cpu.pc = Make16(cpuHi, cpuLo) + 1
 }
 
 func (cpu *CPU) rti() {
-	cpu.pf = flags.ProgramFlags(cpu.stackPop())
+	cpu.pf = ProgramFlags(cpu.stackPop())
 
 	var cpuLo = cpu.stackPop()
 	var cpuHi = cpu.stackPop()
 
-	cpu.pc = utils.Make16(cpuHi, cpuLo)
+	cpu.pc = Make16(cpuHi, cpuLo)
 }
 
 /*** MISC ***/
 
 func (cpu *CPU) brk() {
-	cpu.pf.Set(flags.B)
-	cpu.interruptRoutine(flags.IRQ, 0xFFFE)
-	cpu.pf.Clear(flags.B)
+	cpu.pf.Set(B)
+	cpu.interruptRoutine(IRQ, 0xFFFE)
+	cpu.pf.Clear(B)
 }
 
 /*** Instruction Helpers ***/
 
 func (cpu *CPU) setNZ(data uint8) {
 	const signBit = 1 << 7
-	cpu.pf.SetIf(flags.N, (data&signBit) != 0)
-	cpu.pf.SetIf(flags.Z, data == 0)
+	cpu.pf.SetIf(N, (data&signBit) != 0)
+	cpu.pf.SetIf(Z, data == 0)
 }
 
 func (cpu *CPU) binaryArithmetic(data uint8) {
 	const signBit = 1 << 7
 	const carryBit = 1 << 8
 
-	var carry = uint16(cpu.pf & flags.C)
+	var carry = uint16(cpu.pf & C)
 	var result = uint16(cpu.acc) + uint16(data) + carry
-	var finalResult = utils.Lo(result)
+	var finalResult = Lo(result)
 
-	cpu.pf.SetIf(flags.N, (finalResult&signBit) != 0)
-	cpu.pf.SetIf(flags.V, ^((cpu.acc^data)&(cpu.acc^finalResult)) == signBit)
-	cpu.pf.SetIf(flags.Z, finalResult == 0)
-	cpu.pf.SetIf(flags.C, (result&carryBit) != 0)
+	cpu.pf.SetIf(N, (finalResult&signBit) != 0)
+	cpu.pf.SetIf(V, ^((cpu.acc^data)&(cpu.acc^finalResult)) == signBit)
+	cpu.pf.SetIf(Z, finalResult == 0)
+	cpu.pf.SetIf(C, (result&carryBit) != 0)
 
 	cpu.acc = finalResult
 }
